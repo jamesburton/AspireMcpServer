@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "aspire": {
+      "command": "C:\\Development\\MCP\\AspireMcpServer\\AspireMcpServer\\bin\\Release\\net9.0\\win-x64\\publish\\AspireMcpServer.exe",
+      "env": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    },
+    "aspire-dev": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "C:\\Development\\MCP\\AspireMcpServer\\AspireMcpServer\\AspireMcpServer.csproj"
+      ],
+      "cwd": "C:\\Development\\MCP\\AspireMcpServer",
+      "env": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}
