@@ -2,6 +2,11 @@
   <!-- Preserve all MCP tool classes and their methods -->
   <assembly fullname="AspireMcpServer" preserve="all">
     <type fullname="AspireMcpServer.Services.AspireCommands" preserve="all" />
+    <type fullname="AspireMcpServer.Services.Extensions.AspireTemplateCommands" preserve="all" />
+    <type fullname="AspireMcpServer.Services.Extensions.AspireMonitoringCommands" preserve="all" />
+    <type fullname="AspireMcpServer.Services.Extensions.AspireCloudDeploymentCommands" preserve="all" />
+    <type fullname="AspireMcpServer.Services.Extensions.AspireOrchestrationCommands" preserve="all" />
+    <type fullname="AspireMcpServer.Services.Extensions.AspireDevOpsCommands" preserve="all" />
     <type fullname="AspireMcpServer.Core.AspireExecutor" preserve="all" />
     <type fullname="AspireMcpServer.Core.CommandResult" preserve="all" />
     <type fullname="AppJsonSerializerContext" preserve="all" />

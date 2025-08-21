@@ -11,6 +11,45 @@ A comprehensive Model Context Protocol (MCP) server that exposes .NET Aspire CLI
 - **Template Management**: List, install, and uninstall Aspire project templates
 - **Deployment**: Generate manifests and deploy to various targets (Kubernetes, Docker Compose, etc.)
 
+### 🆕 Enhanced Template & Extension Management
+- **Custom Template Creation**: Create, package, and validate custom Aspire project templates
+- **Template Source Management**: Add, remove, and update template sources from multiple repositories
+- **Template Discovery**: Search and get detailed information about available templates
+- **Extension Integration**: Seamless integration with Aspire extensions and community templates
+
+### 🆕 Advanced Resource Monitoring & Health Checks
+- **Real-time Monitoring**: Monitor CPU, memory, network, and disk metrics in real-time
+- **Health Status Tracking**: Comprehensive health checks with dependency analysis
+- **Performance Analytics**: Resource utilization statistics and performance reports
+- **Alerting System**: Configurable monitoring alerts with webhook integration
+- **Security Scanning**: Vulnerability, configuration, and compliance scanning
+- **Auto-scaling**: Intelligent resource scaling based on performance metrics
+
+### 🆕 Multi-Cloud Deployment Support
+- **Azure Integration**: Deploy to Azure Container Apps with full configuration support
+- **AWS Support**: Deploy to AWS ECS with VPC, security groups, and load balancer integration
+- **Google Cloud**: Deploy to Google Cloud Run with service accounts and resource limits
+- **Multi-cloud Strategies**: Configure failover and traffic distribution across providers
+- **Custom Cloud Targets**: Support for custom cloud providers and deployment endpoints
+
+### 🆕 Container Orchestration Integration
+- **Kubernetes Support**: Full Kubernetes deployment with ConfigMaps, Secrets, and HPA
+- **Docker Swarm**: Deploy to Docker Swarm with network and volume management
+- **Service Mesh**: Integration with Istio, Linkerd, and Consul Connect
+- **Ingress Management**: Configure ingress controllers and TLS termination
+- **Persistent Storage**: Manage persistent volumes and storage classes
+- **Cluster Policies**: Configure network, security, and RBAC policies
+
+### 🆕 DevOps & CI/CD Integration
+- **Pipeline Generation**: Generate GitHub Actions, Azure DevOps, and GitLab CI pipelines
+- **Infrastructure as Code**: Support for Terraform, Bicep, ARM, Pulumi, and CDK
+- **Testing Automation**: Configure unit, integration, e2e, performance, and security testing
+- **Deployment Strategies**: Blue-green, canary, rolling, and recreate deployment patterns
+- **Observability**: Integrate with Prometheus, Grafana, Jaeger, ELK, and commercial APM tools
+- **Secrets Management**: Integration with Azure Key Vault, AWS Secrets, HashiCorp Vault
+- **Compliance**: Generate SOC2, ISO27001, HIPAA, GDPR, and PCI-DSS compliance reports
+- **Disaster Recovery**: Configure backup, replication, and failover strategies
+
 ### Dynamic CLI Tool
 - **DynamicAspire**: Execute any .NET Aspire CLI command with custom arguments
 - **Future-Proof**: Supports any current or future Aspire CLI commands automatically
