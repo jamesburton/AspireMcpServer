@@ -1,0 +1,268 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Generate changelog
+      id: changelog
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "CHANGELOG=Manual release of ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+        else
+          # Get commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          fi
+          # Escape newlines for GitHub output
+          CHANGELOG="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+          echo "CHANGELOG=$CHANGELOG" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        release_name: AspireMcpServer ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          # .NET Aspire MCP Server ${{ steps.get_version.outputs.VERSION }}
+          
+          A comprehensive Model Context Protocol (MCP) server for .NET Aspire with 70+ enterprise-grade tools.
+          
+          ## 🚀 Features
+          - **70+ Comprehensive Tools** across all categories
+          - **Enhanced Template Management** with custom template creation
+          - **Advanced Resource Monitoring** with real-time metrics and alerting
+          - **Multi-Cloud Deployment** support for Azure, AWS, GCP
+          - **Container Orchestration** with Kubernetes and Docker Swarm
+          - **DevOps & CI/CD Integration** with pipeline generation
+          - **AOT Compilation** for optimal performance and minimal footprint
+          
+          ## 📦 Downloads
+          Choose the appropriate binary for your platform:
+          - **Windows x64**: `AspireMcpServer-win-x64.exe`
+          - **Linux x64**: `AspireMcpServer-linux-x64`
+          - **macOS x64**: `AspireMcpServer-osx-x64`
+          - **macOS ARM64**: `AspireMcpServer-osx-arm64`
+          
+          ## 🔧 Installation
+          1. Download the appropriate binary for your platform
+          2. Make it executable (Linux/macOS): `chmod +x AspireMcpServer-*`
+          3. Configure your MCP client (see README.md)
+          
+          ## 📚 Documentation
+          - [README.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/README.md) - Complete setup and usage guide
+          - [ENHANCED_FEATURES.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/ENHANCED_FEATURES.md) - Enterprise features overview
+          - [USAGE_EXAMPLES.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/USAGE_EXAMPLES.md) - Practical examples
+          - [AOT-GUIDE.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/AOT-GUIDE.md) - AOT compilation guide
+          
+          ## 🔄 Changes
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+        draft: false
+        prerelease: false
+
+  build-and-publish:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            runtime: win-x64
+            artifact_name: AspireMcpServer-win-x64.exe
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact_name: AspireMcpServer-linux-x64
+          - os: macos-latest
+            runtime: osx-x64
+            artifact_name: AspireMcpServer-osx-x64
+          - os: macos-latest
+            runtime: osx-arm64
+            artifact_name: AspireMcpServer-osx-arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Get version
+      id: get_version
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Publish AOT
+      run: |
+        dotnet publish AspireMcpServer/AspireMcpServer.csproj \
+          --configuration Release \
+          --runtime ${{ matrix.runtime }} \
+          --self-contained true \
+          --output ./publish \
+          /p:PublishAot=true \
+          /p:PublishSingleFile=true \
+          /p:PublishTrimmed=true \
+          /p:DebuggerSupport=false \
+          /p:EnableUnsafeUTF7Encoding=false \
+          /p:InvariantGlobalization=true \
+          /p:OptimizationPreference=Size
+          
+    - name: Prepare artifact
+      shell: bash
+      run: |
+        cd publish
+        if [ "${{ matrix.runtime }}" == "win-x64" ]; then
+          mv AspireMcpServer.exe ../${{ matrix.artifact_name }}
+        else
+          mv AspireMcpServer ../${{ matrix.artifact_name }}
+          chmod +x ../${{ matrix.artifact_name }}
+        fi
+        cd ..
+        
+    - name: Upload binary to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ matrix.artifact_name }}
+        asset_name: ${{ matrix.artifact_name }}
+        asset_content_type: application/octet-stream
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ./${{ matrix.artifact_name }}
+        retention-days: 90
+
+  generate-checksums:
+    needs: [create-release, build-and-publish]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        
+    - name: Generate checksums
+      run: |
+        cd artifacts
+        find . -name "AspireMcpServer-*" -exec basename {} \; | while read file; do
+          echo "Generating checksum for $file"
+          find . -name "$file" -exec sha256sum {} \; >> ../checksums.txt
+        done
+        cd ..
+        # Clean up the paths in checksums
+        sed -i 's|./[^/]*/||g' checksums.txt
+        cat checksums.txt
+        
+    - name: Upload checksums to release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./checksums.txt
+        asset_name: checksums.txt
+        asset_content_type: text/plain
+
+  docker-build:
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository_owner }}/aspire-mcp-server:latest
+          ghcr.io/${{ github.repository_owner }}/aspire-mcp-server:${{ steps.get_version.outputs.TAG_VERSION }}
+        labels: |
+          org.opencontainers.image.title=AspireMcpServer
+          org.opencontainers.image.description=Comprehensive .NET Aspire MCP Server with 70+ enterprise tools
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.version=${{ steps.get_version.outputs.VERSION }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.licenses=MIT

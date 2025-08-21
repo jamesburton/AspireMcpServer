@@ -1,0 +1,29 @@
+name: "AspireMcpServer CodeQL Configuration"
+
+disable-default-queries: false
+
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+paths:
+  - AspireMcpServer/
+  
+paths-ignore:
+  - "**/*.md"
+  - "**/*.txt"
+  - "**/*.yml"
+  - "**/*.yaml"
+  - ".github/"
+  - "docs/"
+  - "**/bin/"
+  - "**/obj/"
+  - "**/publish/"
+
+query-filters:
+  - exclude:
+      id: cs/web/missing-function-level-access-control
+      
+packs:
+  - codeql/csharp-queries
+  - codeql/csharp-security-extended-queries

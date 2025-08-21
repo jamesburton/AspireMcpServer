@@ -1,0 +1,240 @@
+name: Code Quality and Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  code-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Cache .NET packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+      
+    - name: Run Code Analysis
+      run: |
+        dotnet build --configuration Release --verbosity normal --no-restore \
+          /p:TreatWarningsAsErrors=false \
+          /p:WarningsAsErrors="" \
+          /p:RunAnalyzersDuringBuild=true \
+          /p:RunCodeAnalysis=true
+          
+    - name: Install dotnet format
+      run: dotnet tool install -g dotnet-format
+      
+    - name: Check code formatting
+      run: dotnet format --verify-no-changes --verbosity diagnostic
+      
+    - name: Run security analysis
+      run: |
+        dotnet list package --vulnerable --include-transitive 2>&1 | tee security-analysis.txt
+        if grep -q "has the following vulnerable packages" security-analysis.txt; then
+          echo "::warning::Vulnerable packages detected"
+          cat security-analysis.txt
+        fi
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        config-file: './.github/dependency-review-config.yml'
+        
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'csharp' ]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        config-file: ./.github/codeql/codeql-config.yml
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Build for CodeQL
+      run: |
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
+
+  sonarcloud:
+    runs-on: ubuntu-latest
+    if: env.SONAR_TOKEN != ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Cache SonarCloud packages
+      uses: actions/cache@v4
+      with:
+        path: ~\sonar\cache
+        key: ${{ runner.os }}-sonar
+        restore-keys: ${{ runner.os }}-sonar
+        
+    - name: Install SonarCloud scanner
+      run: |
+        dotnet tool install --global dotnet-sonarscanner
+        
+    - name: Build and analyze
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        dotnet-sonarscanner begin /k:"${{ github.repository_owner }}_AspireMcpServer" /o:"${{ github.repository_owner }}" /d:sonar.login="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.dotcover.reportsPaths="dotCover.Output.html"
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
+        dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+
+  license-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Install license checker
+      run: dotnet tool install --global dotnet-project-licenses
+      
+    - name: Check licenses
+      run: |
+        dotnet restore
+        dotnet-project-licenses -i . -o licenses.json --format json
+        dotnet-project-licenses -i . -o licenses.txt --format table
+        
+    - name: Upload license report
+      uses: actions/upload-artifact@v4
+      with:
+        name: license-report
+        path: |
+          licenses.json
+          licenses.txt
+        retention-days: 30
+
+  performance-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Build Release
+      run: |
+        dotnet restore
+        dotnet build --configuration Release --no-restore
+        
+    - name: Build AOT
+      run: |
+        dotnet publish AspireMcpServer/AspireMcpServer.csproj \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          --output ./publish-aot \
+          /p:PublishAot=true \
+          /p:PublishSingleFile=true \
+          /p:PublishTrimmed=true
+          
+    - name: Performance comparison
+      run: |
+        echo "## Performance Metrics" >> performance-report.md
+        echo "| Metric | Regular Build | AOT Build |" >> performance-report.md
+        echo "|--------|---------------|-----------|" >> performance-report.md
+        
+        # File size comparison
+        REGULAR_SIZE=$(stat -c%s "AspireMcpServer/bin/Release/net9.0/linux-x64/AspireMcpServer.dll")
+        AOT_SIZE=$(stat -c%s "publish-aot/AspireMcpServer")
+        echo "| Binary Size | ${REGULAR_SIZE} bytes | ${AOT_SIZE} bytes |" >> performance-report.md
+        
+        # Startup time test (basic)
+        echo "| Startup Test | Regular | AOT |" >> performance-report.md
+        REGULAR_TIME=$(time -p timeout 5s dotnet AspireMcpServer/bin/Release/net9.0/linux-x64/AspireMcpServer.dll --help 2>&1 | grep real | cut -d' ' -f2 || echo "timeout")
+        AOT_TIME=$(time -p timeout 5s ./publish-aot/AspireMcpServer --help 2>&1 | grep real | cut -d' ' -f2 || echo "timeout")
+        echo "| Startup Time | ${REGULAR_TIME}s | ${AOT_TIME}s |" >> performance-report.md
+        
+        cat performance-report.md
+        
+    - name: Upload performance report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-report
+        path: performance-report.md
+        retention-days: 30
+
+env:
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
